@@ -218,8 +218,8 @@ namespace appbase {
 
                // This handle can be constructed and moved
                handle() = default;
-               handle(handle&&) noexcept = default;
-               handle& operator= (handle&& rhs) noexcept = default;
+               handle(handle&&) = default;
+               handle& operator= (handle&& rhs) = default;
 
                // dont allow copying since this protects the resource
                handle(const handle& ) = delete;
