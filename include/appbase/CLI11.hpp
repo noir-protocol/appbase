@@ -8704,11 +8704,20 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
     commentLead.push_back(commentChar);
     commentLead.push_back(' ');
 
+    // TOML
+    if(app->get_parent() == nullptr && commentChar == '#') {
+        out << commentLead << "This is a TOML config file.\n";
+        out << commentLead << "For more information, see https://github.com/toml-lang/toml\n";
+    }
+
     std::vector<std::string> groups = app->get_groups();
     bool defaultUsed = false;
     groups.insert(groups.begin(), std::string("Options"));
-    if(write_description && (app->get_configurable() || app->get_parent() == nullptr || app->get_name().empty())) {
-        out << commentLead << detail::fix_newlines(commentLead, app->get_description()) << '\n';
+    if(write_description && (app->get_parent() == nullptr || app->get_name().empty())) {
+        auto description = app->get_description();
+        if (description.size() > 0) {
+            out << commentLead << detail::fix_newlines(commentLead, app->get_description()) << '\n';
+        }
     }
     for(auto &group : groups) {
         if(group == "Options" || group.empty()) {
@@ -8743,12 +8752,15 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                     }
                 }
 
+                if(write_description && opt->has_description()) {
+                    out << '\n';
+                    out << commentLead << detail::fix_newlines(commentLead, opt->get_description()) << '\n';
+                }
+
                 if(!value.empty()) {
-                    if(write_description && opt->has_description()) {
-                        out << '\n';
-                        out << commentLead << detail::fix_newlines(commentLead, opt->get_description()) << '\n';
-                    }
-                    out << name << valueDelimiter << value << '\n';
+                    out << name << ' ' << valueDelimiter << ' ' << value << '\n';
+                } else {
+                    out << commentLead << name << ' ' << valueDelimiter << ' ' << '\n';
                 }
             }
         }
@@ -8765,7 +8777,14 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
 
     for(const App *subcom : subcommands) {
         if(!subcom->get_name().empty()) {
-            if(subcom->get_configurable() && app->got_subcommand(subcom)) {
+            if(subcom->get_configurable()) { // && app->got_subcommand(subcom)) {
+                if(write_description) {
+                    auto description = subcom->get_description();
+                    if (description.size() > 0) {
+                        out << '\n';
+                        out << commentLead << detail::fix_newlines(commentLead, description) << '\n';
+                    }
+                }
                 if(!prefix.empty() || app->get_parent() == nullptr) {
                     out << '[' << prefix << subcom->get_name() << "]\n";
                 } else {
@@ -8866,7 +8885,7 @@ inline std::string Formatter::make_description(const App *app) const {
 inline std::string Formatter::make_usage(const App *app, std::string name) const {
     std::stringstream out;
 
-    out << get_label("Usage") << ":" << (name.empty() ? "" : " ") << name;
+    out << "\n" << get_label("Usage") << ":" << (name.empty() ? "" : " ") << name;
 
     std::vector<std::string> groups = app->get_groups();
 
