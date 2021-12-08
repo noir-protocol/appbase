@@ -8,10 +8,7 @@
 #include <typeindex>
 
 namespace appbase {
-   namespace bpo = boost::program_options;
    namespace fs = std::filesystem;
-
-   using config_comparison_f = std::function<bool(const boost::any& a, const boost::any& b)>;
 
    class application
    {
@@ -33,7 +30,7 @@ namespace appbase {
           *
           * @return A string worthy of output with -v/--version, or "Unknown" if git not available
           */
-         string version_string() const;
+         std::string version_string() const;
          /** @brief User provided version string for version_string() which overrides git describe value.
           */
          void set_version_string(std::string v);
@@ -41,7 +38,7 @@ namespace appbase {
           *
           * @return A string worthy of output with -v/--version, or "Unknown" if git not available
           */
-         string full_version_string() const;
+         std::string full_version_string() const;
          /** @brief User provided full version string for full_version_string()
           */
          void set_full_version_string(std::string v);
@@ -67,6 +64,9 @@ namespace appbase {
           * @return Config directory, possibly from command line
           */
          fs::path config_dir() const;
+
+         fs::path home_dir() const;
+
          /** @brief Get logging configuration path.
           *
           * @return Logging configuration location from command line
@@ -115,21 +115,10 @@ namespace appbase {
           */
          bool                 is_quiting()const;
 
-         /**
-          * Register a configuration type with appbase. most "plain" types are already registered in
-          * application.cpp. Failure to register a type will cause initialization to fail.
-          */
-         template <typename T> void register_config_type() {
-            register_config_type_comparison(typeid(T), [](const auto& a, const auto& b) {
-               return boost::any_cast<const T&>(a) == boost::any_cast<const T&>(b);
-            });
-         }
-         void register_config_type_comparison(std::type_index, config_comparison_f comp);
-
          static application&  instance();
 
-         abstract_plugin* find_plugin(const string& name)const;
-         abstract_plugin& get_plugin(const string& name)const;
+         abstract_plugin* find_plugin(const std::string& name)const;
+         abstract_plugin& get_plugin(const std::string& name)const;
 
          template<typename Plugin>
          auto& register_plugin() {
@@ -145,7 +134,7 @@ namespace appbase {
 
          template<typename Plugin>
          Plugin* find_plugin()const {
-            string name = boost::core::demangle(typeid(Plugin).name());
+            auto name = boost::core::demangle(typeid(Plugin).name());
             return dynamic_cast<Plugin*>(find_plugin(name));
          }
 
@@ -227,7 +216,10 @@ namespace appbase {
             return pri_queue;
          }
 
-         const bpo::variables_map& get_options() const;
+         const CLI::App& get_options() const;
+
+         void set_name(std::string name);
+         const std::string& name() const;
 
          /**
           * Set the current thread schedule priority to maximum.
@@ -239,7 +231,7 @@ namespace appbase {
          template<typename Impl>
          friend class plugin;
 
-         bool initialize_impl(int argc, char** argv, vector<abstract_plugin*> autostart_plugins);
+         bool initialize_impl(int argc, char** argv, std::vector<abstract_plugin*> autostart_plugins);
 
          /** these notifications get called from the plugin when their state changes so that
           * the application can call shutdown in the reverse order.
@@ -251,13 +243,13 @@ namespace appbase {
 
       private:
          application(); ///< private because application is a singleton that should be accessed via instance()
-         map<string, std::unique_ptr<abstract_plugin>> plugins; ///< all registered plugins
-         vector<abstract_plugin*>                  initialized_plugins; ///< stored in the order they were started running
-         vector<abstract_plugin*>                  running_plugins; ///< stored in the order they were started running
+         std::map<std::string, std::unique_ptr<abstract_plugin>> plugins; ///< all registered plugins
+         std::vector<abstract_plugin*>                  initialized_plugins; ///< stored in the order they were started running
+         std::vector<abstract_plugin*>                  running_plugins; ///< stored in the order they were started running
 
-         std::function<void()>                     sighup_callback;
-         map<std::type_index, erased_method_ptr>   methods;
-         map<std::type_index, erased_channel_ptr>  channels;
+         std::function<void()>                          sighup_callback;
+         std::map<std::type_index, erased_method_ptr>   methods;
+         std::map<std::type_index, erased_channel_ptr>  channels;
 
          std::shared_ptr<boost::asio::io_service>  io_serv;
          execution_priority_queue                  pri_queue;
@@ -292,11 +284,11 @@ namespace appbase {
             static_cast<Impl*>(this)->plugin_requires([&](auto& plug){});
          }
 
-         virtual void initialize(const variables_map& options) override {
+         virtual void initialize(const CLI::App& cli, const CLI::App& config) override {
             if(_state == registered) {
                _state = initialized;
-               static_cast<Impl*>(this)->plugin_requires([&](auto& plug){ plug.initialize(options); });
-               static_cast<Impl*>(this)->plugin_initialize(options);
+               static_cast<Impl*>(this)->plugin_requires([&](auto& plug){ plug.initialize(cli, config); });
+               static_cast<Impl*>(this)->plugin_initialize(cli, config);
                //ilog( "initializing plugin ${name}", ("name",name()) );
                app().plugin_initialized(*this);
             }
@@ -325,7 +317,7 @@ namespace appbase {
          }
 
       protected:
-         plugin(const string& name) : _name(name){}
+         plugin(const std::string& name) : _name(name){}
 
       private:
          state _state = abstract_plugin::registered;
