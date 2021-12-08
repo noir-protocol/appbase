@@ -22,7 +22,7 @@ set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads)
 
-find_package(Boost 1.60 REQUIRED COMPONENTS filesystem program_options)
+find_package(Boost 1.60 REQUIRED COMPONENTS program_options)
 
 if( APPLE )
   # Apple Specific Options Here
@@ -47,7 +47,7 @@ add_library( appbase
              ${HEADERS}
            )
 
-target_link_libraries( appbase Boost::program_options Boost::filesystem Threads::Threads)
+target_link_libraries( appbase Boost::program_options Threads::Threads)
 
 target_include_directories( appbase
                             PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
