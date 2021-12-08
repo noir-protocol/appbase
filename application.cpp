@@ -420,7 +420,7 @@ void application::set_thread_priority_max() {
 }
 
 void application::exec() {
-   {
+   if (running_plugins.size()) {
       boost::asio::io_service::work work(*io_serv);
       (void)work;
       bool more = true;
