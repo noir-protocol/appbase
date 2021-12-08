@@ -1,9 +1,6 @@
 #pragma once
-#include <boost/program_options.hpp>
+#include <appbase/CLI11.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
-#include <string>
-#include <vector>
-#include <map>
 
 #define APPBASE_PLUGIN_REQUIRES_VISIT( r, visitor, elem ) \
   visitor( appbase::app().register_plugin<elem>() ); 
@@ -15,12 +12,6 @@
    }
 
 namespace appbase {
-
-   using boost::program_options::options_description;
-   using boost::program_options::variables_map;
-   using std::string;
-   using std::vector;
-   using std::map;
 
    class application;
    application& app();
@@ -37,8 +28,8 @@ namespace appbase {
          virtual ~abstract_plugin(){}
          virtual state get_state()const = 0;
          virtual const std::string& name()const  = 0;
-         virtual void set_program_options( options_description& cli, options_description& cfg ) = 0;
-         virtual void initialize(const variables_map& options) = 0;
+         virtual void set_program_options(CLI::App& cli, CLI::App& config) = 0;
+         virtual void initialize(const CLI::App& cli, const CLI::App& config) = 0;
          virtual void handle_sighup() = 0;
          virtual void startup() = 0;
          virtual void shutdown() = 0;
