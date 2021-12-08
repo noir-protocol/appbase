@@ -1,15 +1,15 @@
 #include <appbase/application.hpp>
 #include <appbase/version.hpp>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/asio/signal_set.hpp>
-#include <boost/algorithm/string.hpp>
 
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
 #include <future>
+#include <regex>
 
 namespace appbase {
 
@@ -347,14 +347,22 @@ bool application::initialize_impl(int argc, char** argv, vector<abstract_plugin*
       throw;
    }
 
+   // split a string at delimiters
+   auto split = [](const auto& str, std::string delim = R"(\s\t,)") -> auto {
+      auto re = std::regex(delim);
+      return std::vector<std::string>{
+         std::sregex_token_iterator(str.begin(), str.end(), re, -1),
+         std::sregex_token_iterator()
+      };
+   };
+
+
    if(options.count("plugin") > 0)
    {
       auto plugins = options.at("plugin").as<std::vector<std::string>>();
       for(auto& arg : plugins)
       {
-         vector<string> names;
-         boost::split(names, arg, boost::is_any_of(" \t,"));
-         for(const std::string& name : names)
+         for (const std::string& name : split(arg))
             get_plugin(name).initialize(options);
       }
    }
@@ -452,7 +460,7 @@ void application::print_default_config(std::ostream& os) {
    {
       if(!od->description().empty()) {
          std::string desc = od->description();
-         boost::replace_all(desc, "\n", "\n# ");
+         desc = std::regex_replace(desc, std::regex("\n"), "\n# ");
          os << "# " << desc;
          std::map<std::string, std::string>::iterator it;
          if((it = option_to_plug.find(od->long_name())) != option_to_plug.end())
