@@ -11,7 +11,7 @@ plugins are configured, initialized, started, and shutdown in the proper order.
 - Automatically Load Dependent Plugins in Order
 - Plugins can specify commandline arguments and configuration file options
 - Program gracefully exits from SIGINT, SIGTERM, and SIGPIPE
-- Minimal Dependencies (Boost 1.60, c++14)
+- Minimal Dependencies (Boost 1.60, c++17)
 
 ## Defining a Plugin
 
@@ -27,42 +27,39 @@ by `APPBASE_PLUGIN_REQUIRES` will be Initialized or Started prior to the plugin 
 
 Shutdown is called in the reverse order of Startup. 
 
-```
-class net_plugin : public appbase::plugin<net_plugin>
-{
-   public:
-     net_plugin(){};
-     ~net_plugin(){};
+``` c++
+class net_plugin : public appbase::plugin<net_plugin> {
+public:
+   APPBASE_PLUGIN_REQUIRES( (chain_plugin) );
 
-     APPBASE_PLUGIN_REQUIRES( (chain_plugin) );
+   void set_program_options(CLI::App& cli, CLI::App& config) override {
+      auto net_options = config.add_subcommand("net", "Net configuration");
+      net_options->configurable();
 
-     virtual void set_program_options( options_description& cli, options_description& cfg ) override
-     {
-        cfg.add_options()
-              ("listen-endpoint", bpo::value<string>()->default_value( "127.0.0.1:9876" ), "The local IP address and port to listen for incoming connections.")
-              ("remote-endpoint", bpo::value< vector<string> >()->composing(), "The IP address and port of a remote peer to sync with.")
-              ("public-endpoint", bpo::value<string>()->default_value( "0.0.0.0:9876" ), "The public IP address and port that should be advertized to peers.")
-              ;
-     }
+      net_options->add_option("listen-endpoint", "The local IP address and port to listen for incoming connections.")->default_str("127.0.0.1:9876");
+      net_options->add_option("remote-endpoint", "The IP address and port of a remote peer to sync with.")->take_all();
+      net_options->add_option("public-endpoint", "The public IP address and port that should be advertized to peers.")->default_str("0.0.0.0:9876");
+   }
 
-     void plugin_initialize( const variables_map& options ) { std::cout << "initialize net plugin\n"; }
-     void plugin_startup()  { std::cout << "starting net plugin \n"; }
-     void plugin_shutdown() { std::cout << "shutdown net plugin \n"; }
-
+   void plugin_initialize(const CLI::App& cli, const CLI::App& config) { std::cout << "initialize net plugin\n"; }
+   void plugin_startup()  { std::cout << "starting net plugin \n"; }
+   void plugin_shutdown() { std::cout << "shutdown net plugin \n"; }
 };
 
-int main( int argc, char** argv ) {
+
+
+int main(int argc, char** argv) {
    try {
-      appbase::app().register_plugin<net_plugin>(); // implict registration of chain_plugin dependency
-      if( !appbase::app().initialize( argc, argv ) )
+      appbase::app().register_plugin<net_plugin>(); // implicit registration of chain_plugin dependency
+      if (!appbase::app().initialize(argc, argv))
          return -1;
       appbase::app().startup();
       appbase::app().exec();
-   } catch ( const boost::exception& e ) {
+   } catch (const boost::exception& e) {
       std::cerr << boost::diagnostic_information(e) << "\n";
-   } catch ( const std::exception& e ) {
+   } catch (const std::exception& e) {
       std::cerr << e.what() << "\n";
-   } catch ( ... ) {
+   } catch (...) {
       std::cerr << "unknown exception\n";
    }
    std::cout << "exited cleanly\n";
@@ -108,12 +105,45 @@ To trigger a graceful exit call `appbase::app().quit()` or send SIGTERM, SIGINT,
 
 ## Dependencies 
 
-1. c++14 or newer  (clang or g++)
-2. Boost 1.60 or newer compiled with C++14 support
+1. c++17 or newer  (clang or g++)
+2. Boost 1.60 or newer compiled with C++17 support
 
-To compile boost with c++14 use:
+To compile boost with c++17 use:
 
 ```
 ./b2 ...  cxxflags="-std=c++0x -stdlib=libc++" linkflags="-stdlib=libc++" ...
+```
+
+## Program options
+
+Program options can be set by CLI arguments or TOML-formatted configuration
+file. AppBase uses [CLI11](https://github.com/CLIUtils/CLI11) to handle these
+options. If specific path isn't provided, AppBase looks up configuration file
+from `$HOME/.${app_name}/config/${config_filename}`.
+
+``` c++
+class chain_plugin : public appbase::plugin<chain_plugin> {
+public:
+   APPBASE_PLUGIN_REQUIRES();
+
+   // Command-line options can be added to `cli`,
+   // Configuration options (read and written via file) can be added to `config`.
+   void set_program_options(CLI::App& cli, CLI::App& config) override {
+      // Create subsection `chain` in TOML config file by add_subcommand.
+      // Calling configurable() is required to be listed in config file.
+      auto chain_options = config.add_subcommand("chain", "Chain configuration");
+      chain_options->configurable();
+
+      chain_options->add_option("readonly", "open the database in read only mode");
+      chain_options->add_option("dbsize", "Minimum size MB of database shared memory file")->default_val(8 * 1024ULL);
+
+      // A command-line option that doesn't have leading dashes `-` is considered
+      // as a positional argument. Refer to CLI11 documentation.
+      cli.add_flag("--replay", "clear chain database and replay all blocks");
+      cli.add_flag("--reset", "clear chain database and block log");
+   }
+
+   /* ... */
+};
 ```
 
