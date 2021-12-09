@@ -390,6 +390,10 @@ void application::set_sighup_callback(std::function<void()> callback) {
 }
 
 const CLI::App& application::get_options() const{
+   return my->cli;
+}
+
+const CLI::App& application::get_config() const {
    return my->config;
 }
 

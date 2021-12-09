@@ -217,6 +217,7 @@ namespace appbase {
          }
 
          const CLI::App& get_options() const;
+         const CLI::App& get_config() const;
 
          void set_name(std::string name);
          const std::string& name() const;
