@@ -65,6 +65,14 @@ namespace appbase {
           */
          fs::path config_dir() const;
 
+         /**
+          * @brief Set default config filename or path
+          *
+          * @param config_file Default configuration filename or its path
+          * to use if not specified on the command line.
+          */
+         void set_default_config_file(std::string config_file);
+
          fs::path home_dir() const;
 
          /** @brief Get logging configuration path.

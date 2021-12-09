@@ -20,9 +20,8 @@ class application_impl {
       fs::path                home_dir;
       fs::path                data_dir;
       fs::path                config_dir;
-      fs::path                config_file;
+      fs::path                config_file{"config.toml"};
       fs::path                _logging_conf{"logging.json"};
-      fs::path                _config_file_name;
 
       uint64_t                _version = 0;
       std::string             _version_str = appbase_version_string;
@@ -68,6 +67,10 @@ void application::set_default_data_dir(const fs::path& data_dir) {
 
 void application::set_default_config_dir(const fs::path& config_dir) {
   my->config_dir = config_dir;
+}
+
+void application::set_default_config_file(std::string config_file) {
+   my->config_file = config_file;
 }
 
 fs::path application::get_logging_conf() const {
@@ -202,8 +205,9 @@ bool application::initialize_impl(int argc, char** argv, std::vector<abstract_pl
    // Parse "--config" CLI option
    if (auto arg = parse_option("--config")) {
       my->config_file = *arg;
-   } else {
-      my->config_file = config_dir() / "config.toml";
+   }
+   if (my->config_file.is_relative()) {
+      my->config_file = config_dir() / my->config_file;
    }
    if (!fs::exists(my->config_file)) {
       write_default_config(my->config_file);
@@ -382,7 +386,7 @@ fs::path application::home_dir() const {
 }
 
 fs::path application::full_config_file_path() const {
-   return fs::canonical(my->_config_file_name);
+   return fs::canonical(my->config_file);
 }
 
 void application::set_sighup_callback(std::function<void()> callback) {
