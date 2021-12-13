@@ -8885,7 +8885,7 @@ inline std::string Formatter::make_description(const App *app) const {
 inline std::string Formatter::make_usage(const App *app, std::string name) const {
     std::stringstream out;
 
-    out << "\n" << get_label("Usage") << ":" << (name.empty() ? "" : " ") << name;
+    out << get_label("Usage") << ":" << (name.empty() ? "" : " ") << name;
 
     std::vector<std::string> groups = app->get_groups();
 
