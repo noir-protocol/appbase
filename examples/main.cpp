@@ -1,6 +1,8 @@
 #include <appbase/application.hpp>
-#include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
+#include <cstdlib>
+#include <iostream>
+#include <filesystem>
 
 struct database { };
 
@@ -51,6 +53,13 @@ public:
 
 int main(int argc, char** argv) {
    try {
+      if (auto arg = std::getenv("HOME")) {
+         if (arg != nullptr) {
+            std::filesystem::path home_dir = arg;
+            appbase::app().set_home_dir(home_dir / ".app");
+         }
+      }
+      appbase::app().set_config_file("app.toml");
       appbase::app().register_plugin<net_plugin>();
       if (!appbase::app().initialize(argc, argv))
          return -1;
