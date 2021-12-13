@@ -54,10 +54,8 @@ public:
 int main(int argc, char** argv) {
    try {
       if (auto arg = std::getenv("HOME")) {
-         if (arg != nullptr) {
-            std::filesystem::path home_dir = arg;
-            appbase::app().set_home_dir(home_dir / ".app");
-         }
+         std::filesystem::path home_dir = arg;
+         appbase::app().set_home_dir(home_dir / ".app");
       }
       appbase::app().set_config_file("app.toml");
       appbase::app().register_plugin<net_plugin>();
