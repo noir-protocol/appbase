@@ -10,82 +10,34 @@
 namespace appbase {
    namespace fs = std::filesystem;
 
-   class application
-   {
+   class application {
       public:
-         ~application();
-
-
-         /** @brief Set version
-          *
-          * @param version Version output with -v/--version
-          */
-         void set_version(uint64_t version);
-         /** @brief Get version
-          *
-          * @return Version output with -v/--version
-          */
-         uint64_t version() const;
-         /** @brief Get version string; generated from git describe if available
-          *
-          * @return A string worthy of output with -v/--version, or "Unknown" if git not available
-          */
-         std::string version_string() const;
-         /** @brief User provided version string for version_string() which overrides git describe value.
-          */
-         void set_version_string(std::string v);
-         /** @brief Get full version string; same as version_string() unless set differently.
-          *
-          * @return A string worthy of output with -v/--version, or "Unknown" if git not available
-          */
-         std::string full_version_string() const;
-         /** @brief User provided full version string for full_version_string()
-          */
-         void set_full_version_string(std::string v);
-         /** @brief Set default data directory
-          *
-          * @param data_dir Default data directory to use if not specified
-          *                 on the command line.
-          */
-         void set_default_data_dir(const fs::path& data_dir = "data-dir");
-         /** @brief Get data directory
-          *
-          * @return Data directory, possibly from command line
-          */
-         fs::path data_dir() const;
-         /** @brief Set default config directory
-          *
-          * @param config_dir Default configuration directory to use if not
-          *                   specified on the command line.
-          */
-         void set_default_config_dir(const fs::path& config_dir = "etc");
-         /** @brief Get config directory
-          *
-          * @return Config directory, possibly from command line
-          */
-         fs::path config_dir() const;
-
          /**
-          * @brief Set default config filename or path
+          * @brief Get home directory that contains config file and runtime data
           *
-          * @param config_file Default configuration filename or its path
-          * to use if not specified on the command line.
+          * @return Home directory
           */
-         void set_default_config_file(std::string config_file);
-
          fs::path home_dir() const;
 
-         /** @brief Get logging configuration path.
+         /**
+          * @brief Set home directory for config file and runtime data
           *
-          * @return Logging configuration location from command line
+          * @param home_dir Home directory
           */
-         fs::path get_logging_conf() const;
-         /** @brief Get full config.ini path
+         void set_home_dir(const fs::path& home_dir);
+
+         /**
+          * @brief Get config file path
+          */
+         fs::path config_file() const;
+
+         /**
+          * @brief Set config file path
           *
-          * @return Config directory & config file name, possibly from command line. Only
-          *         valid after initialize() has been called.
+          * @param config_file a filename or path for configuration
           */
-         fs::path full_config_file_path() const;
+         void set_config_file(const fs::path& config_file);
+
          /** @brief Set function pointer invoked on receipt of SIGHUP
           *
           * The provided function will be invoked on receipt of SIGHUP followed
@@ -96,6 +48,7 @@ namespace appbase {
           *                 receives the HUP (1) signal.
           */
           void set_sighup_callback(std::function<void()> callback);
+
          /**
           * @brief Looks for the --plugin commandline / config option and calls initialize on those plugins
           *
@@ -160,8 +113,7 @@ namespace appbase {
           * @return reference to the method described by the declaration
           */
          template<typename MethodDecl>
-         auto get_method() -> std::enable_if_t<is_method_decl<MethodDecl>::value, typename MethodDecl::method_type&>
-         {
+         auto get_method() -> std::enable_if_t<is_method_decl<MethodDecl>::value, typename MethodDecl::method_type&> {
             using method_type = typename MethodDecl::method_type;
             auto key = std::type_index(typeid(MethodDecl));
             auto itr = methods.find(key);
@@ -181,8 +133,7 @@ namespace appbase {
           * @return reference to the channel described by the declaration
           */
          template<typename ChannelDecl>
-         auto get_channel() -> std::enable_if_t<is_channel_decl<ChannelDecl>::value, typename ChannelDecl::channel_type&>
-         {
+         auto get_channel() -> std::enable_if_t<is_channel_decl<ChannelDecl>::value, typename ChannelDecl::channel_type&> {
             using channel_type = typename ChannelDecl::channel_type;
             auto key = std::type_index(typeid(ChannelDecl));
             auto itr = channels.find(key);
@@ -195,21 +146,21 @@ namespace appbase {
          }
 
          /**
-          * Do not run io_service in any other threads, as application assumes single-threaded execution in exec().
-          * @return io_serivice of application
+          * Do not run io_context in any other threads, as application assumes single-threaded execution in exec().
+          * @return io_context of application
           */
-         boost::asio::io_service& get_io_service() { return *io_serv; }
+         boost::asio::io_context& io_context() { return *io_ctx; }
 
          /**
-          * Post func to run on io_service with given priority.
+          * Post func to run on io_context with given priority.
           *
           * @param priority can be appbase::priority::* constants or any int, larger ints run first
-          * @param func function to run on io_service
+          * @param func function to run on io_context
           * @return result of boost::asio::post
           */
          template <typename Func>
-         auto post( int priority, Func&& func ) {
-            return boost::asio::post(*io_serv, pri_queue.wrap(priority, std::forward<Func>(func)));
+         auto post(int priority, Func&& func) {
+            return boost::asio::post(*io_ctx, pri_queue.wrap(priority, std::forward<Func>(func)));
          }
 
          /**
@@ -217,18 +168,15 @@ namespace appbase {
           * prioritized execution.
           *
           * Example:
-          *   boost::asio::steady_timer timer( app().get_io_service() );
+          *   boost::asio::steady_timer timer( app().io_context() );
           *   timer.async_wait( app().get_priority_queue().wrap(priority::low, [](){ do_something(); }) );
           */
-         auto& get_priority_queue() {
+         auto& priority_queue() {
             return pri_queue;
          }
 
-         const CLI::App& get_options() const;
-         const CLI::App& get_config() const;
-
-         void set_name(std::string name);
-         const std::string& name() const;
+         CLI::App& cli();
+         CLI::App& config();
 
          /**
           * Set the current thread schedule priority to maximum.
@@ -260,7 +208,7 @@ namespace appbase {
          std::map<std::type_index, erased_method_ptr>   methods;
          std::map<std::type_index, erased_channel_ptr>  channels;
 
-         std::shared_ptr<boost::asio::io_service>  io_serv;
+         std::shared_ptr<boost::asio::io_context>  io_ctx;
          execution_priority_queue                  pri_queue;
 
          void start_sighup_handler( std::shared_ptr<boost::asio::signal_set> sighup_set );
@@ -269,7 +217,7 @@ namespace appbase {
          void print_default_config(std::ostream& os);
 
          void wait_for_signal(std::shared_ptr<boost::asio::signal_set> ss);
-         void setup_signal_handling_on_ios(boost::asio::io_service& ios, bool startup);
+         void setup_signal_handling_on_ioc(boost::asio::io_context& ioc, bool startup);
 
          void shutdown();
 
@@ -279,21 +227,19 @@ namespace appbase {
 
    application& app();
 
-
    template<typename Impl>
    class plugin : public abstract_plugin {
       public:
          plugin():_name(boost::core::demangle(typeid(Impl).name())){}
-         virtual ~plugin(){}
 
-         virtual state get_state()const override         { return _state; }
-         virtual const std::string& name()const override { return _name; }
+         state get_state()const override         { return _state; }
+         const std::string& name()const override { return _name; }
 
          virtual void register_dependencies() {
             static_cast<Impl*>(this)->plugin_requires([&](auto& plug){});
          }
 
-         virtual void initialize(const CLI::App& cli, const CLI::App& config) override {
+         void initialize(const CLI::App& cli, const CLI::App& config) override {
             if(_state == registered) {
                _state = initialized;
                static_cast<Impl*>(this)->plugin_requires([&](auto& plug){ plug.initialize(cli, config); });
@@ -304,10 +250,10 @@ namespace appbase {
             assert(_state == initialized); /// if initial state was not registered, final state cannot be initialized
          }
 
-         virtual void handle_sighup() override {
+         void handle_sighup() override {
          }
 
-         virtual void startup() override {
+         void startup() override {
             if(_state == initialized) {
                _state = started;
                static_cast<Impl*>(this)->plugin_requires([&](auto& plug){ plug.startup(); });
@@ -317,7 +263,7 @@ namespace appbase {
             assert(_state == started); // if initial state was not initialized, final state cannot be started
          }
 
-         virtual void shutdown() override {
+         void shutdown() override {
             if(_state == started) {
                _state = stopped;
                //ilog( "shutting down plugin ${name}", ("name",name()) );
@@ -343,4 +289,4 @@ namespace appbase {
       }
    }
 
-}
+} // namespace appbase
