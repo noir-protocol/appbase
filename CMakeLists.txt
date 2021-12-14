@@ -68,4 +68,8 @@ install( TARGETS
 )
 install_directory_permissions( DIRECTORY ${CMAKE_INSTALL_FULL_INCLUDEDIR}/appbase )
 
-add_subdirectory( examples )
+option(BUILD_EXAMPLES "Build an appbase application example" OFF)
+
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
