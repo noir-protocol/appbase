@@ -89,6 +89,7 @@ namespace appbase {
 
             auto plug = new Plugin();
             plugins[plug->name()].reset(plug);
+            plug->set_program_options(cli(), config());
             plug->register_dependencies();
             return *plug;
          }

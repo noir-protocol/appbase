@@ -25,6 +25,7 @@ class application_impl {
 application::application()
 :my(new application_impl()){
    io_ctx = std::make_shared<boost::asio::io_context>();
+   set_program_options();
 }
 
 fs::path application::home_dir() const {
@@ -132,10 +133,6 @@ application& application::instance() {
 application& app() { return application::instance(); }
 
 void application::set_program_options() {
-   for(auto& plug : plugins) {
-      plug.second->set_program_options(my->cli, my->config);
-   }
-
    my->config.add_option("plugin", "Plugin(s) to enable, may be specified multiple times")->take_all();
 
    // dummy options to show help text (not used)
@@ -147,8 +144,6 @@ void application::set_program_options() {
 }
 
 bool application::initialize_impl(int argc, char** argv, std::vector<abstract_plugin*> autostart_plugins) {
-   set_program_options();
-
    auto parse_option = [&](const char* option_name) -> std::optional<std::string> {
       auto it = std::find_if(argv, argv + argc, [=](const auto v) {
          return std::string(v).find(option_name) == 0;
