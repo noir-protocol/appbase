@@ -57,8 +57,8 @@ namespace appbase {
           * @return true if the application and plugins were initialized, false or exception on error
           */
          template<typename... Plugin>
-         bool                 initialize(int argc, char** argv) {
-            return initialize_impl(argc, argv, {find_plugin<Plugin>()...});
+         bool                 initialize() {
+            return initialize_impl({find_plugin<Plugin>()...});
          }
 
          void                  startup();
@@ -185,11 +185,28 @@ namespace appbase {
           */
          void set_thread_priority_max();
 
+         template<typename... Plugin>
+         int run(int argc, char** argv) {
+            try {
+               cli().parse(argc, argv);
+               if (cli().get_subcommands().empty()) {
+                  if (!initialize<Plugin...>()) {
+                     return 1;
+                  }
+                  startup();
+                  exec();
+               }
+               return 0;
+            } catch (const CLI::ParseError& e) {
+               return cli().exit(e);
+            }
+         }
+
       protected:
          template<typename Impl>
          friend class plugin;
 
-         bool initialize_impl(int argc, char** argv, std::vector<abstract_plugin*> autostart_plugins);
+         bool initialize_impl(std::vector<abstract_plugin*> autostart_plugins);
 
          /** these notifications get called from the plugin when their state changes so that
           * the application can call shutdown in the reverse order.

@@ -13,7 +13,7 @@ using std::cout;
 
 class application_impl {
    public:
-      CLI::App                cli{"Appbase", "appbase"};
+      CLI::App                cli;
       CLI::App                config;
 
       fs::path                home_dir;
@@ -26,6 +26,30 @@ application::application()
 :my(new application_impl()){
    io_ctx = std::make_shared<boost::asio::io_context>();
    set_program_options();
+   my->cli.parse_complete_callback([&]() {
+      if (my->cli.count("--home")) {
+         fs::path home_dir = my->cli["--home"]->as<std::string>();
+         if (home_dir.is_relative())
+            home_dir = fs::current_path() / home_dir;
+         my->home_dir = home_dir;
+      }
+      if (my->cli.count("--config")) {
+         my->config_file = my->cli["--config"]->as<std::string>();
+         if (my->config_file.is_relative())
+            my->config_file = fs::current_path() / my->config_file;
+      }
+      if (!fs::exists(config_file())) {
+         write_default_config(config_file());
+      }
+      my->config.set_config("config", config_file().generic_string(), "Configuration file path");
+
+      // Parse config.toml only (do not handle CLI arguments)
+      auto tmp = my->cli.get_name().c_str();
+      try {
+         my->config.parse(1, &tmp);
+      } catch (const CLI::Success&) {
+      }
+   });
 }
 
 fs::path application::home_dir() const {
@@ -140,57 +164,9 @@ void application::set_program_options() {
    my->cli.add_option("--config", "Configuration file path");
 
    my->cli.add_option("--plugin", "Plugin(s) to enable, may be specified multiple times")->take_all();
-   my->cli.add_flag("--print-default-config", "Print default configuration template");
 }
 
-bool application::initialize_impl(int argc, char** argv, std::vector<abstract_plugin*> autostart_plugins) {
-   auto parse_option = [&](const char* option_name) -> std::optional<std::string> {
-      auto it = std::find_if(argv, argv + argc, [=](const auto v) {
-         return std::string(v).find(option_name) == 0;
-      });
-      if (it != argv + argc) {
-         auto arg = std::string(*it);
-         auto pos = arg.find("=");
-         if (pos != std::string::npos) {
-            arg = arg.substr(pos + 1);
-         } else {
-            arg = std::string(*++it);
-         }
-         return arg;
-      }
-      return std::nullopt;
-   };
-
-   // Parse "--home" CLI option
-   if (auto arg = parse_option("--home")) {
-      fs::path home_dir = *arg;
-      if (home_dir.is_relative())
-         home_dir = fs::current_path() / home_dir;
-      my->home_dir = home_dir;
-   }
-
-   // Parse "--config" CLI option
-   if (auto arg = parse_option("--config")) {
-      my->config_file = *arg;
-      if (my->config_file.is_relative())
-         my->config_file = fs::current_path() / my->config_file;
-   }
-   if (!fs::exists(config_file())) {
-      write_default_config(config_file());
-   }
-   my->config.set_config("config", config_file().generic_string(), "Configuration file path");
-
-   // Parse CLI options
-   CLI11_PARSE(my->cli, argc, argv);
-
-   // Parse config.toml only (do not handle CLI arguments)
-   CLI11_PARSE(my->config, 1, argv);
-
-   if (my->cli.count("--print-default-config")) {
-      print_default_config(cout);
-      return false;
-   }
-
+bool application::initialize_impl(std::vector<abstract_plugin*> autostart_plugins) {
    // split a string at delimiters
    auto split = [](const auto& str, std::string delim = R"(\s\t,)") -> auto {
       auto re = std::regex(delim);
