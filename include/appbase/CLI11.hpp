@@ -8804,9 +8804,9 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                     out << '[' << subname << "]\n";
                 }
                 out << to_config(subcom, default_also, write_description, "");
-            } else {
-                out << to_config(
-                    subcom, default_also, write_description, prefix + subcom->get_name() + parentSeparatorChar);
+            // } else {
+            //     out << to_config(
+            //         subcom, default_also, write_description, prefix + subcom->get_name() + parentSeparatorChar);
             }
         }
     }
