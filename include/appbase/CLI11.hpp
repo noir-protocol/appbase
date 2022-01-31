@@ -6246,6 +6246,9 @@ class App {
             throw OptionNotFound(subcom);
         return subc;
     }
+    App *get_subcommand_no_throw(std::string subcom) const {
+        return _find_subcommand(subcom, false, false);
+    }
     /// Get a pointer to subcommand by index
     App *get_subcommand(int index = 0) const {
         if(index >= 0) {
