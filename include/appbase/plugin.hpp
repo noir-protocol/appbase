@@ -28,8 +28,8 @@ namespace appbase {
          virtual ~abstract_plugin(){}
          virtual state get_state()const = 0;
          virtual const std::string& name()const  = 0;
-         virtual void set_program_options(CLI::App& cli, CLI::App& config) = 0;
-         virtual void initialize(const CLI::App& cli, const CLI::App& config) = 0;
+         virtual void set_program_options(CLI::App& config) = 0;
+         virtual void initialize(const CLI::App& config) = 0;
          virtual void handle_sighup() = 0;
          virtual void startup() = 0;
          virtual void shutdown() = 0;

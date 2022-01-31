@@ -89,7 +89,7 @@ namespace appbase {
 
             auto plug = new Plugin();
             plugins[plug->name()].reset(plug);
-            plug->set_program_options(cli(), config());
+            plug->set_program_options(config());
             plug->register_dependencies();
             return *plug;
          }
@@ -176,8 +176,8 @@ namespace appbase {
             return pri_queue;
          }
 
-         CLI::App& cli();
          CLI::App& config();
+         void parse_config(int argc, char** argv);
 
          /**
           * Set the current thread schedule priority to maximum.
@@ -188,8 +188,8 @@ namespace appbase {
          template<typename... Plugin>
          int run(int argc, char** argv) {
             try {
-               cli().parse(argc, argv);
-               if (cli().get_subcommands().empty()) {
+               parse_config(argc, argv);
+               if (config().get_subcommands().empty()) {
                   if (!initialize<Plugin...>()) {
                      return 1;
                   }
@@ -198,7 +198,7 @@ namespace appbase {
                }
                return 0;
             } catch (const CLI::ParseError& e) {
-               return cli().exit(e);
+               return config().exit(e);
             }
          }
 
@@ -257,11 +257,11 @@ namespace appbase {
             static_cast<Impl*>(this)->plugin_requires([&](auto& plug){});
          }
 
-         void initialize(const CLI::App& cli, const CLI::App& config) override {
+         void initialize(const CLI::App& config) override {
             if(_state == registered) {
                _state = initialized;
-               static_cast<Impl*>(this)->plugin_requires([&](auto& plug){ plug.initialize(cli, config); });
-               static_cast<Impl*>(this)->plugin_initialize(cli, config);
+               static_cast<Impl*>(this)->plugin_requires([&](auto& plug){ plug.initialize(config); });
+               static_cast<Impl*>(this)->plugin_initialize(config);
                //ilog( "initializing plugin ${name}", ("name",name()) );
                app().plugin_initialized(*this);
             }

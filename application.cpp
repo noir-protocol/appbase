@@ -13,7 +13,6 @@ using std::cout;
 
 class application_impl {
    public:
-      CLI::App                cli;
       CLI::App                config;
 
       fs::path                home_dir;
@@ -26,35 +25,11 @@ application::application()
 :my(new application_impl()){
    io_ctx = std::make_shared<boost::asio::io_context>();
    set_program_options();
-   my->cli.parse_complete_callback([&]() {
-      if (my->cli.count("--home")) {
-         fs::path home_dir = my->cli["--home"]->as<std::string>();
-         if (home_dir.is_relative())
-            home_dir = fs::current_path() / home_dir;
-         my->home_dir = home_dir;
-      }
-      if (my->cli.count("--config")) {
-         my->config_file = my->cli["--config"]->as<std::string>();
-         if (my->config_file.is_relative())
-            my->config_file = fs::current_path() / my->config_file;
-      }
-      if (!fs::exists(config_file())) {
-         write_default_config(config_file());
-      }
-      my->config.set_config("config", config_file().generic_string(), "Configuration file path");
-
-      // Parse config.toml only (do not handle CLI arguments)
-      auto tmp = my->cli.get_name().c_str();
-      try {
-         my->config.parse(1, &tmp);
-      } catch (const CLI::Success&) {
-      }
-   });
 }
 
 fs::path application::home_dir() const {
    if (my->home_dir.empty()) {
-      auto home_dir = fs::path("." + my->cli.get_name());
+      auto home_dir = fs::path("." + my->config.get_name());
       auto home = std::getenv("HOME");
       if (home) {
          home_dir = home / home_dir;
@@ -157,13 +132,11 @@ application& application::instance() {
 application& app() { return application::instance(); }
 
 void application::set_program_options() {
-   my->config.add_option("plugin", "Plugin(s) to enable, may be specified multiple times")->take_all();
+   my->config.add_option("--plugin", "Plugin(s) to enable, may be specified multiple times")->take_all();
 
    // dummy options to show help text (not used)
-   my->cli.add_option("--home", "Directory containing configuration files and runtime data");
-   my->cli.add_option("--config", "Configuration file path");
-
-   my->cli.add_option("--plugin", "Plugin(s) to enable, may be specified multiple times")->take_all();
+   my->config.add_option("--home", "Directory containing configuration files and runtime data")->configurable(false);
+   my->config.add_option("--config", "Configuration file path")->configurable(false);
 }
 
 bool application::initialize_impl(std::vector<abstract_plugin*> autostart_plugins) {
@@ -176,24 +149,17 @@ bool application::initialize_impl(std::vector<abstract_plugin*> autostart_plugin
       };
    };
 
-   if (my->cli.count("--plugin")) {
-      auto plugins = my->cli["--plugin"]->as<std::vector<std::string>>();
+   if (my->config.count("--plugin")) {
+      auto plugins = my->config["--plugin"]->as<std::vector<std::string>>();
       for (auto& arg : plugins) {
          for (const std::string& name : split(arg))
-            get_plugin(name).initialize(my->cli, my->config);
-      }
-   }
-   if (my->config.count("plugin")) {
-      auto plugins = my->config["plugin"]->as<std::vector<std::string>>();
-      for (auto& arg : plugins) {
-         for (const std::string& name : split(arg))
-            get_plugin(name).initialize(my->cli, my->config);
+            get_plugin(name).initialize(my->config);
       }
    }
    try {
       for (auto plugin : autostart_plugins)
          if (plugin != nullptr && plugin->get_state() == abstract_plugin::registered)
-            plugin->initialize(my->cli, my->config);
+            plugin->initialize(my->config);
    } catch (...) {
       std::cerr << "Failed to initialize\n";
       return false;
@@ -292,12 +258,44 @@ void application::set_sighup_callback(std::function<void()> callback) {
    sighup_callback = callback;
 }
 
-CLI::App& application::cli() {
-   return my->cli;
-}
-
 CLI::App& application::config() {
    return my->config;
+}
+
+void application::parse_config(int argc, char** argv) {
+   auto parse_option = [&](const char* option_name) -> std::optional<std::string> {
+      auto it = std::find_if(argv, argv + argc, [&](const auto v) {
+         return std::string(v).find(option_name) == 0;
+      });
+      if (it != argv + argc) {
+         auto arg = std::string(*it);
+         auto pos = arg.find("=");
+         if (pos != std::string::npos) {
+            arg = arg.substr(pos + 1);
+         } else {
+            arg = std::string(*++it);
+         }
+         return arg;
+      }
+      return std::nullopt;
+   };
+   if (auto arg = parse_option("--home")) {
+      fs::path home_dir = *arg;
+      if (home_dir.is_relative())
+         home_dir = fs::current_path() / home_dir;
+      my->home_dir = home_dir;
+   }
+   if (auto arg = parse_option("--config")) {
+      my->config_file = *arg;
+      if (my->config_file.is_relative())
+         my->config_file = fs::current_path() / my->config_file;
+   }
+   if (!fs::exists(config_file())) {
+      write_default_config(config_file());
+   }
+   my->config.set_config("-c", config_file().generic_string(), "Configuration file path")->group("");
+
+   config().parse(argc, argv);
 }
 
 } /// namespace appbase
