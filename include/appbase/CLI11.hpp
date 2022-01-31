@@ -2415,7 +2415,7 @@ inline bool split_short(const std::string &current, std::string &name, std::stri
 }
 
 // Returns false if not a long option. Otherwise, sets opt name and other side of = and returns true
-inline bool split_long(const std::string &current, std::string &name, std::string &value) {
+inline bool split_long(const std::string &current, std::string &name, std::string &value, std::string &section) {
     if(current.size() > 2 && current.substr(0, 2) == "--" && valid_first_char(current[2])) {
         auto loc = current.find_first_of('=');
         if(loc != std::string::npos) {
@@ -2424,6 +2424,11 @@ inline bool split_long(const std::string &current, std::string &name, std::strin
         } else {
             name = current.substr(2);
             value = "";
+        }
+        auto sep = name.find('.');
+        if(sep != std::string::npos) {
+            section = name.substr(0, sep);
+            name = name.substr(sep + 1);
         }
         return true;
     }
@@ -3905,15 +3910,15 @@ class Formatter : public FormatterBase {
     ///@{
 
     /// This prints out an option help line, either positional or optional form
-    virtual std::string make_option(const Option *opt, bool is_positional) const {
+    virtual std::string make_option(const Option *opt, bool is_positional, std::string prefix = "") const {
         std::stringstream out;
         detail::format_help(
-            out, make_option_name(opt, is_positional) + make_option_opts(opt), make_option_desc(opt), column_width_);
+            out, make_option_name(opt, is_positional, prefix) + make_option_opts(opt), make_option_desc(opt), column_width_);
         return out.str();
     }
 
     /// @brief This is the name part of an option, Default: left column
-    virtual std::string make_option_name(const Option *, bool) const;
+    virtual std::string make_option_name(const Option *, bool, std::string) const;
 
     /// @brief This is the options part of the name, Default: combined into left column
     virtual std::string make_option_opts(const Option *) const;
@@ -4684,7 +4689,8 @@ class Option : public OptionBase<Option> {
     /// If all_options is false, pick just the most descriptive name to show.
     /// Use `get_name(true)` to get the positional name (replaces `get_pname`)
     std::string get_name(bool positional = false,  ///< Show the positional name
-                         bool all_options = false  ///< Show every option
+                         bool all_options = false, ///< Show every option
+                         std::string prefix = ""
     ) const {
         if(get_group().empty())
             return {};  // Hidden
@@ -4695,28 +4701,28 @@ class Option : public OptionBase<Option> {
 
             /// The all list will never include a positional unless asked or that's the only name.
             if((positional && (!pname_.empty())) || (snames_.empty() && lnames_.empty())) {
-                name_list.push_back(pname_);
+                name_list.push_back(prefix + pname_);
             }
             if((get_items_expected() == 0) && (!fnames_.empty())) {
                 for(const std::string &sname : snames_) {
-                    name_list.push_back("-" + sname);
+                    name_list.push_back("-" + prefix + sname);
                     if(check_fname(sname)) {
                         name_list.back() += "{" + get_flag_value(sname, "") + "}";
                     }
                 }
 
                 for(const std::string &lname : lnames_) {
-                    name_list.push_back("--" + lname);
+                    name_list.push_back("--" + prefix + lname);
                     if(check_fname(lname)) {
                         name_list.back() += "{" + get_flag_value(lname, "") + "}";
                     }
                 }
             } else {
                 for(const std::string &sname : snames_)
-                    name_list.push_back("-" + sname);
+                    name_list.push_back("-" + prefix + sname);
 
                 for(const std::string &lname : lnames_)
-                    name_list.push_back("--" + lname);
+                    name_list.push_back("--" + prefix + lname);
             }
 
             return detail::join(name_list);
@@ -4724,18 +4730,18 @@ class Option : public OptionBase<Option> {
 
         // This returns the positional name no matter what
         if(positional)
-            return pname_;
+            return prefix + pname_;
 
         // Prefer long name
         if(!lnames_.empty())
-            return std::string(2, '-') + lnames_[0];
+            return std::string(2, '-') + prefix + lnames_[0];
 
         // Or short name if no long name
         if(!snames_.empty())
-            return std::string(1, '-') + snames_[0];
+            return std::string(1, '-') + prefix + snames_[0];
 
         // If positional is the only name, it's okay to use that
-        return pname_;
+        return prefix + pname_;
     }
 
     ///@}
@@ -5786,6 +5792,20 @@ class App {
                        std::string option_description = "",
                        bool defaulted = false,
                        std::function<std::string()> func = {}) {
+        if(option_name.find('.') != std::string::npos) {
+            if(option_name.find(',') != std::string::npos) {
+                throw BadNameString("Section option doesn't support multiple names: " + option_name);
+            }
+            std::string option;
+            std::string value;
+            std::string section;
+            if(!detail::split_long(option_name, option, value, section)) {
+                throw BadNameString("Section option must have a long name: " + option_name);
+            }
+            if(auto subcom = get_subcommand(section)) {
+                return subcom->add_option("--" + option, option_callback, option_description, defaulted, func);
+            }
+        }
         Option myopt{option_name, option_description, option_callback, this};
 
         if(std::find_if(std::begin(options_), std::end(options_), [&myopt](const Option_p &v) {
@@ -6210,6 +6230,13 @@ class App {
         subcom->parent_ = this;
         subcommands_.push_back(std::move(subcom));
         return subcommands_.back().get();
+    }
+
+    App *add_section(std::string section_name, std::string section_description = "") {
+        auto subcom = add_subcommand(section_name, section_description);
+        subcom->group("Sections"); // hide from help text
+        subcom->set_help_flag(); // remove --help option
+        return subcom;
     }
 
     /// Removes a subcommand from the App. Takes a subcommand pointer. Returns true if found and removed.
@@ -6813,6 +6840,18 @@ class App {
 
     /// Get an option by name (noexcept non-const version)
     Option *get_option_no_throw(std::string option_name) noexcept {
+        if(option_name.find('.') != std::string::npos) {
+            std::string option;
+            std::string value;
+            std::string section;
+            if(!detail::split_long(option_name, option, value, section)) {
+                return nullptr;
+            }
+            if(auto subcom = get_subcommand_no_throw(section)) {
+                return subcom->get_option_no_throw("--" + option);
+            }
+            return nullptr;
+        }
         for(Option_p &opt : options_) {
             if(opt->check_name(option_name)) {
                 return opt.get();
@@ -6832,6 +6871,18 @@ class App {
 
     /// Get an option by name (noexcept const version)
     const Option *get_option_no_throw(std::string option_name) const noexcept {
+        if(option_name.find('.') != std::string::npos) {
+            std::string option;
+            std::string value;
+            std::string section;
+            if(!detail::split_long(option_name, option, value, section)) {
+                return nullptr;
+            }
+            if(auto subcom = get_subcommand_no_throw(section)) {
+                return subcom->get_option_no_throw("--" + option);
+            }
+            return nullptr;
+        }
         for(const Option_p &opt : options_) {
             if(opt->check_name(option_name)) {
                 return opt.get();
@@ -7197,13 +7248,13 @@ class App {
 
     /// Selects a Classifier enum based on the type of the current argument
     detail::Classifier _recognize(const std::string &current, bool ignore_used_subcommands = true) const {
-        std::string dummy1, dummy2;
+        std::string dummy1, dummy2, dummy3;
 
         if(current == "--")
             return detail::Classifier::POSITIONAL_MARK;
         if(_valid_subcommand(current, ignore_used_subcommands))
             return detail::Classifier::SUBCOMMAND;
-        if(detail::split_long(current, dummy1, dummy2))
+        if(detail::split_long(current, dummy1, dummy2, dummy3))
             return detail::Classifier::LONG;
         if(detail::split_short(current, dummy1, dummy2)) {
             if(dummy1[0] >= '0' && dummy1[0] <= '9') {
@@ -7907,10 +7958,11 @@ class App {
         std::string arg_name;
         std::string value;
         std::string rest;
+        std::string section;
 
         switch(current_type) {
         case detail::Classifier::LONG:
-            if(!detail::split_long(current, arg_name, value))
+            if(!detail::split_long(current, arg_name, value, section))
                 throw HorribleError("Long parsed but missing (you should not see this):" + args.back());
             break;
         case detail::Classifier::SHORT:
@@ -7927,6 +7979,18 @@ class App {
         case detail::Classifier::NONE:
         default:
             throw HorribleError("parsing got called with invalid option! You should not see this");
+        }
+
+        if(section.size()) {
+            auto subcom = get_subcommand_no_throw(section);
+            while(!subcom && get_parent() != nullptr) {
+                subcom = get_parent()->get_subcommand_no_throw(section);
+            }
+            if(!subcom)
+                throw OptionNotFound("Section " + section);
+            auto &arg = args.back();
+            arg = "--" + arg_name + (value.size() ? "=" + value : "");
+            return subcom->_parse_arg(args, current_type);
         }
 
         auto op_ptr =
@@ -8716,7 +8780,7 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
     std::vector<std::string> groups = app->get_groups();
     bool defaultUsed = false;
     groups.insert(groups.begin(), std::string("Options"));
-    if(write_description && (app->get_parent() == nullptr || app->get_name().empty())) {
+    if(write_description && (/* app->get_parent() == nullptr || */ app->get_name().empty())) {
         auto description = app->get_description();
         if (description.size() > 0) {
             out << commentLead << detail::fix_newlines(commentLead, app->get_description()) << '\n';
@@ -8780,7 +8844,7 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
 
     for(const App *subcom : subcommands) {
         if(!subcom->get_name().empty()) {
-            if(subcom->get_configurable()) { // && app->got_subcommand(subcom)) {
+            if(subcom->get_configurable() || subcom->get_group() == "Sections") { // && app->got_subcommand(subcom)) {
                 if(write_description) {
                     auto description = subcom->get_description();
                     if (description.size() > 0) {
@@ -8857,6 +8921,18 @@ inline std::string Formatter::make_groups(const App *app, AppFormatMode mode) co
 
             if(group != groups.back())
                 out << "\n";
+        }
+    }
+
+    // Sections
+    auto subcomms = app->get_subcommands([](const auto* subcom) {
+        return subcom->get_name().size() && subcom->get_group() == "Sections";
+    });
+    for(auto &subcom : subcomms) {
+        auto prefix = subcom->get_name() + ".";
+        out << subcom->get_name() + " Options:\n";
+        for(const Option *opt : subcom->get_options()) {
+            out << make_option(opt, false, prefix);
         }
     }
 
@@ -8987,6 +9063,7 @@ inline std::string Formatter::make_subcommands(const App *app, AppFormatMode mod
 
     // For each group, filter out and print subcommands
     for(const std::string &group : subcmd_groups_seen) {
+        if(group == "Sections") continue;
         out << "\n" << group << ":\n";
         std::vector<const App *> subcommands_group = app->get_subcommands(
             [&group](const App *sub_app) { return detail::to_lower(sub_app->get_group()) == detail::to_lower(group); });
@@ -9031,11 +9108,11 @@ inline std::string Formatter::make_expanded(const App *sub) const {
     return detail::find_and_replace(tmp, "\n", "\n  ") + "\n";
 }
 
-inline std::string Formatter::make_option_name(const Option *opt, bool is_positional) const {
+inline std::string Formatter::make_option_name(const Option *opt, bool is_positional, std::string prefix = "") const {
     if(is_positional)
-        return opt->get_name(true, false);
+        return opt->get_name(true, false, prefix);
 
-    return opt->get_name(false, true);
+    return opt->get_name(false, true, prefix);
 }
 
 inline std::string Formatter::make_option_opts(const Option *opt) const {
