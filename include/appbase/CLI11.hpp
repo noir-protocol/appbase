@@ -8949,8 +8949,8 @@ inline std::string Formatter::make_help(const App *app, std::string name, AppFor
     out << make_description(app);
     out << make_usage(app, name);
     out << make_positionals(app);
-    out << make_groups(app, mode);
     out << make_subcommands(app, mode);
+    out << make_groups(app, mode);
     out << '\n' << make_footer(app);
 
     return out.str();
