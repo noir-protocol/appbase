@@ -8785,7 +8785,11 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                     auto description = subcom->get_description();
                     if (description.size() > 0) {
                         out << '\n';
-                        out << commentLead << detail::fix_newlines(commentLead, description) << '\n';
+                        if(description[0] != commentChar) {
+                            out << commentLead << detail::fix_newlines(commentLead, description) << '\n';
+                        } else {
+                            out << description << '\n';
+                        }
                     }
                 }
                 if(!prefix.empty() || app->get_parent() == nullptr) {
