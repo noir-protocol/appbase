@@ -14,16 +14,16 @@ public:
       // Create subsection `chain` in TOML config file by add_section.
       auto chain_options = config.add_section("chain", "Chain configuration");
 
-      // Can be called with CLI or set by config file.
+      // Can be called with commandline or set by config file.
       chain_options->add_option("--readonly", "open the database in read only mode");
 
-      // Call group("") not to be listed in CLI options. (Config file only options)
+      // Call group("") not to be listed in commandline options. (config file only options)
       chain_options->add_option("--dbsize", "Minimum size MB of database shared memory file")->default_val(8 * 1024ULL)->group("");
 
       // A command-line option that doesn't have leading dashes `-` is considered
       // as a positional argument. Refer to CLI11 documentation.
 
-      // Call configurable(false) not to be listed in config file. (CLI only options)
+      // Call configurable(false) not to be listed in config file. (commandline only options)
       chain_options->add_flag("--replay", "clear chain database and replay all blocks")->configurable(false);
       chain_options->add_flag("--reset", "clear chain database and block log")->configurable(false);
    }
