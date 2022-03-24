@@ -3,6 +3,7 @@
 #include <appbase/execution_priority_queue.hpp>
 #include <appbase/method.hpp>
 #include <appbase/plugin.hpp>
+#include <boost/noncopyable.hpp>
 #include <boost/core/demangle.hpp>
 #include <filesystem>
 #include <typeindex>
@@ -10,8 +11,12 @@
 namespace appbase {
 namespace fs = std::filesystem;
 
-class application {
+class application : private boost::noncopyable {
 public:
+  application();
+
+  ~application();
+
   /// \brief Get home directory that contains config file and runtime data
   /// \return Home directory
   fs::path home_dir() const;
@@ -58,8 +63,6 @@ public:
   /// \return true if quit() has been called.
   bool is_quiting() const;
 
-  static application& instance();
-
   abstract_plugin* find_plugin(const std::string& name) const;
   abstract_plugin& get_plugin(const std::string& name) const;
 
@@ -69,7 +72,7 @@ public:
     if (existing)
       return *existing;
 
-    auto plug = new Plugin();
+    auto plug = new Plugin(*this);
     plugins[plug->name()].reset(plug);
     plug->set_program_options(config());
     plug->register_dependencies();
@@ -119,7 +122,7 @@ public:
     if (itr != channels.end()) {
       return *channel_type::get_channel(itr->second);
     } else {
-      channels.emplace(std::make_pair(key, channel_type::make_unique()));
+      channels.emplace(std::make_pair(key, channel_type::make_unique(*this)));
       return *channel_type::get_channel(channels.at(key));
     }
   }
@@ -192,7 +195,6 @@ protected:
   /// \}
 
 private:
-  application(); ///< private because application is a singleton that should be accessed via instance()
   std::map<std::string, std::unique_ptr<abstract_plugin>> plugins; ///< all registered plugins
   std::vector<abstract_plugin*> initialized_plugins; ///< stored in the order they were started running
   std::vector<abstract_plugin*> running_plugins; ///< stored in the order they were started running
@@ -217,12 +219,10 @@ private:
   std::unique_ptr<class application_impl> my;
 };
 
-application& app();
-
 template<typename Impl>
 class plugin : public abstract_plugin {
 public:
-  plugin(): _name(boost::core::demangle(typeid(Impl).name())) {}
+  plugin(application& app): app(app), _name(boost::core::demangle(typeid(Impl).name())) {}
 
   state get_state() const override {
     return _state;
@@ -241,7 +241,7 @@ public:
       static_cast<Impl*>(this)->plugin_requires([&](auto& plug) { plug.initialize(config); });
       static_cast<Impl*>(this)->plugin_initialize(config);
       // ilog( "initializing plugin ${name}", ("name",name()) );
-      app().plugin_initialized(*this);
+      app.plugin_initialized(*this);
     }
     assert(_state == initialized); /// if initial state was not registered, final state cannot be initialized
   }
@@ -253,7 +253,7 @@ public:
       _state = started;
       static_cast<Impl*>(this)->plugin_requires([&](auto& plug) { plug.startup(); });
       static_cast<Impl*>(this)->plugin_startup();
-      app().plugin_started(*this);
+      app.plugin_started(*this);
     }
     assert(_state == started); // if initial state was not initialized, final state cannot be started
   }
@@ -268,17 +268,20 @@ public:
 
 protected:
   plugin(const std::string& name): _name(name) {}
+  application& app;
 
 private:
   state _state = abstract_plugin::registered;
   std::string _name;
+
+  friend class application;
 };
 
 template<typename Data, typename DispatchPolicy>
 void channel<Data, DispatchPolicy>::publish(int priority, const Data& data) {
   if (has_subscribers()) {
     // this will copy data into the lambda
-    app().post(priority, [this, data]() { _signal(data); });
+    app.post(priority, [this, data]() { _signal(data); });
   }
 }
 

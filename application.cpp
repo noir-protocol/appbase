@@ -26,6 +26,8 @@ application::application(): my(new application_impl()) {
   set_program_options();
 }
 
+application::~application() = default;
+
 fs::path application::home_dir() const {
   if (my->home_dir.empty()) {
     auto home_dir = fs::path("." + my->config.get_name());
@@ -112,7 +114,7 @@ void application::start_sighup_handler(std::shared_ptr<boost::asio::signal_set> 
   sighup_set->async_wait([sighup_set, this](const boost::system::error_code& err, int /*num*/) {
     if (err)
       return;
-    app().post(priority::medium, [sighup_set, this]() {
+    this->post(priority::medium, [sighup_set, this]() {
       sighup_callback();
       for (auto plugin : initialized_plugins) {
         if (is_quiting())
@@ -123,14 +125,6 @@ void application::start_sighup_handler(std::shared_ptr<boost::asio::signal_set> 
     start_sighup_handler(sighup_set);
   });
 #endif
-}
-
-application& application::instance() {
-  static application _app;
-  return _app;
-}
-application& app() {
-  return application::instance();
 }
 
 void application::set_program_options() {

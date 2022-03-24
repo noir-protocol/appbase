@@ -114,7 +114,7 @@ public:
   }
 
 private:
-  channel() {}
+  channel(application& app): app(app) {}
 
   virtual ~channel() = default;
 
@@ -137,11 +137,12 @@ private:
 
   /// Construct a unique_ptr for the type erased method poiner
   /// \return
-  static erased_channel_ptr make_unique() {
-    return erased_channel_ptr(new channel(), &deleter);
+  static erased_channel_ptr make_unique(appbase::application& app) {
+    return erased_channel_ptr(new channel(app), &deleter);
   }
 
   boost::signals2::signal<void(const Data&), DispatchPolicy> _signal;
+  application& app;
 
   friend class appbase::application;
 };

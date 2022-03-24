@@ -75,17 +75,18 @@ public:
 
 int main(int argc, char** argv) {
   try {
+    appbase::application app{};
     if (auto arg = std::getenv("HOME")) {
       std::filesystem::path home_dir = arg;
-      appbase::app().set_home_dir(home_dir / ".app");
+      app.set_home_dir(home_dir / ".app");
     }
-    appbase::app().set_config_file("app.toml");
-    appbase::app().register_plugin<net_plugin>();
-    appbase::app().parse_config(argc, argv);
-    if (!appbase::app().initialize())
+    app.set_config_file("app.toml");
+    app.register_plugin<net_plugin>();
+    app.parse_config(argc, argv);
+    if (!app.initialize())
       return -1;
-    appbase::app().startup();
-    appbase::app().exec();
+    app.startup();
+    app.exec();
   } catch (const boost::exception& e) {
     std::cerr << boost::diagnostic_information(e) << "\n";
   } catch (const std::exception& e) {

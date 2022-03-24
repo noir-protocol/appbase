@@ -2,18 +2,16 @@
 #include <appbase/CLI11.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
 
-#define APPBASE_PLUGIN_REQUIRES_VISIT(r, visitor, elem) visitor(appbase::app().register_plugin<elem>());
+#define APPBASE_PLUGIN_REQUIRES_VISIT(r, visitor, elem) visitor(app.register_plugin<elem>());
 
 #define APPBASE_PLUGIN_REQUIRES(PLUGINS) \
+  using plugin::plugin; \
   template<typename Lambda> \
   void plugin_requires(Lambda&& l) { \
     BOOST_PP_SEQ_FOR_EACH(APPBASE_PLUGIN_REQUIRES_VISIT, l, PLUGINS) \
   }
 
 namespace appbase {
-
-class application;
-application& app();
 
 class abstract_plugin {
 public:
