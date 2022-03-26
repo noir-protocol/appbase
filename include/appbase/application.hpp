@@ -73,7 +73,9 @@ public:
       return *existing;
 
     auto plug = new Plugin(*this);
-    plugins[plug->name()].reset(plug);
+    auto name = boost::core::demangle(typeid(Plugin).name());
+    plugins[name].reset(plug);
+    plugin_names[plug->name()] = name;
     plug->set_program_options(config());
     plug->register_dependencies();
     return *plug;
@@ -196,6 +198,7 @@ protected:
 
 private:
   std::map<std::string, std::unique_ptr<abstract_plugin>> plugins; ///< all registered plugins
+  std::map<std::string, std::string> plugin_names;
   std::vector<abstract_plugin*> initialized_plugins; ///< stored in the order they were started running
   std::vector<abstract_plugin*> running_plugins; ///< stored in the order they were started running
 
@@ -267,7 +270,7 @@ public:
   }
 
 protected:
-  plugin(const std::string& name): _name(name) {}
+  plugin(application& app, const std::string& name): app(app), _name(name) {}
   application& app;
 
 private:

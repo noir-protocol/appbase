@@ -235,6 +235,12 @@ void application::print_default_config(std::ostream& os) {
 abstract_plugin* application::find_plugin(const std::string& name) const {
   auto itr = plugins.find(name);
   if (itr == plugins.end()) {
+    auto type = plugin_names.find(name);
+    if (type != plugin_names.end()) {
+      itr = plugins.find(type->second);
+    }
+  }
+  if (itr == plugins.end()) {
     return nullptr;
   }
   return itr->second.get();
