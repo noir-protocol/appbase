@@ -9084,7 +9084,7 @@ inline std::string Formatter::make_subcommands(const App *app, AppFormatMode mod
 
 inline std::string Formatter::make_subcommand(const App *sub) const {
     std::stringstream out;
-    detail::format_help(out, sub->get_display_name(true), sub->get_description(), column_width_);
+    detail::format_help(out, sub->get_display_name(false), sub->get_description(), column_width_);
     return out.str();
 }
 
